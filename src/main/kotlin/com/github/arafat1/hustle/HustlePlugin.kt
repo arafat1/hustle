@@ -1,5 +1,6 @@
 package com.github.arafat1.hustle
 
+import org.gradle.api.InvalidUserDataException
 import java.io.IOException
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
@@ -10,6 +11,7 @@ import java.util.ArrayList
 
 import org.gradle.api.Plugin
 import org.gradle.api.Project
+import org.gradle.api.resources.MissingResourceException
 
 class HustlePlugin: Plugin<Project> {
     lateinit var hustleConfig: HustlePluginExtension
@@ -19,6 +21,12 @@ class HustlePlugin: Plugin<Project> {
 
         with(project.task("generateScaffold")) {
             doLast {
+                if (hustleConfig.dbUrl == null) {
+                    throw MissingResourceException("Please provide databse Url")
+                }
+                if (hustleConfig.user == null || hustleConfig.password == null) {
+                    throw InvalidUserDataException("Username or Password missing")
+                }
                 val basePackage = ("${project.group}.${project.name}").replace("[^.a-zA-Z0-9]".toRegex(), "")
                 val entityPackage = "$basePackage.entity"
                 val repoPackage = "$basePackage.repository"
@@ -34,50 +42,42 @@ class HustlePlugin: Plugin<Project> {
 
     private fun generateScaffolds(entityPackage: String, repoPackage: String, entityPath: String, repoPath: String) {
         val conn: Connection
-        try {
-            Class.forName("org.postgresql.Driver")
-            conn = DriverManager.getConnection(hustleConfig.dbUrl, hustleConfig.user, hustleConfig.password)
-            val md: DatabaseMetaData = conn.metaData
+        Class.forName("org.postgresql.Driver")
+        conn = DriverManager.getConnection(hustleConfig.dbUrl, hustleConfig.user, hustleConfig.password)
+        val md: DatabaseMetaData = conn.metaData
 
-            // tables
-            val types = arrayOf("TABLE")
-            val rs: ResultSet = md.getTables("dvdrental", null, "%", types)
+        // tables
+        val types = arrayOf("TABLE")
+        val rs: ResultSet = md.getTables("dvdrental", null, "%", types)
 
-            // columns
-            while (rs.next()) {
-                val tableName: String = rs.getString(3)
-                val pk: ResultSet = md.getPrimaryKeys(null, null, tableName)
-                // primary key
-                var primaryKeyColumn = ""
-                while (pk.next()) {
-                    primaryKeyColumn = pk.getString("COLUMN_NAME")
-                }
-                val tmd =
-                    TableMetaData(tableName, primaryKeyColumn)
-
-                val columns: ResultSet = md.getColumns(null, null, tableName, null)
-                while (columns.next()) {
-                    val columnName: String = columns.getString("COLUMN_NAME")
-                    val datatype: String = columns.getString("TYPE_NAME")
-                    val isNullable: String = columns.getString("IS_NULLABLE")
-                    tmd.columns.add(
-                        Column(
-                            columnName,
-                            datatype,
-                            isNullable
-                        )
-                    )
-                    //println("ColumnName: $columnName, DataType: $datatype, IsNullable: $isNullable")
-                }
-                generateEntityCode(tmd, entityPackage, entityPath)
-                generateRepositoryCode(tmd, repoPackage, repoPath, entityPackage)
+        // columns
+        while (rs.next()) {
+            val tableName: String = rs.getString(3)
+            val pk: ResultSet = md.getPrimaryKeys(null, null, tableName)
+            // primary key
+            var primaryKeyColumn = ""
+            while (pk.next()) {
+                primaryKeyColumn = pk.getString("COLUMN_NAME")
             }
-        } catch (e: IOException) {
-            println(e.message)
-        } catch (e: SQLException) {
-            println(e.message)
-        } catch (e: ClassNotFoundException) {
-            println(e.message)
+            val tmd =
+                TableMetaData(tableName, primaryKeyColumn)
+
+            val columns: ResultSet = md.getColumns(null, null, tableName, null)
+            while (columns.next()) {
+                val columnName: String = columns.getString("COLUMN_NAME")
+                val datatype: String = columns.getString("TYPE_NAME")
+                val isNullable: String = columns.getString("IS_NULLABLE")
+                tmd.columns.add(
+                    Column(
+                        columnName,
+                        datatype,
+                        isNullable
+                    )
+                )
+                //println("ColumnName: $columnName, DataType: $datatype, IsNullable: $isNullable")
+            }
+            generateEntityCode(tmd, entityPackage, entityPath)
+            generateRepositoryCode(tmd, repoPackage, repoPath, entityPackage)
         }
     }
 
