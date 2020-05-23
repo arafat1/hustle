@@ -1,3 +1,5 @@
+package com.github.arafat1.hustle
+
 import java.io.IOException
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
@@ -13,9 +15,9 @@ class HustlePlugin: Plugin<Project> {
     lateinit var hustleConfig: HustlePluginExtension
 
     override fun apply(project: Project) {
-        //this.hustleConfig = project.extensions.create<HustlePluginExtension>("scaffold")
+        this.hustleConfig = project.extensions.create("hustle", HustlePluginExtension::class.java)
 
-        with(project.task("generateRestScaffold")) {
+        with(project.task("generateScaffold")) {
             doLast {
                 val basePackage = ("${project.group}.${project.name}").replace("[^.a-zA-Z0-9]".toRegex(), "")
                 val entityPackage = "$basePackage.entity"
@@ -25,12 +27,12 @@ class HustlePlugin: Plugin<Project> {
                 val repoPath: Path = Paths.get(baseDir, "/src/main/java", repoPackage.replace('.', '/'))
                 entityPath.toFile().mkdir()
                 repoPath.toFile().mkdir()
-                createRestScaffolds(entityPackage, repoPackage, entityPath.toString(), repoPath.toString())
+                generateScaffolds(entityPackage, repoPackage, entityPath.toString(), repoPath.toString())
             }
         }
     }
 
-    private fun createRestScaffolds(entityPackage: String, repoPackage: String, entityPath: String, repoPath: String) {
+    private fun generateScaffolds(entityPackage: String, repoPackage: String, entityPath: String, repoPath: String) {
         val conn: Connection
         try {
             Class.forName("org.postgresql.Driver")
@@ -50,14 +52,21 @@ class HustlePlugin: Plugin<Project> {
                 while (pk.next()) {
                     primaryKeyColumn = pk.getString("COLUMN_NAME")
                 }
-                val tmd = TableMetaData(tableName, primaryKeyColumn)
+                val tmd =
+                    TableMetaData(tableName, primaryKeyColumn)
 
                 val columns: ResultSet = md.getColumns(null, null, tableName, null)
                 while (columns.next()) {
                     val columnName: String = columns.getString("COLUMN_NAME")
                     val datatype: String = columns.getString("TYPE_NAME")
                     val isNullable: String = columns.getString("IS_NULLABLE")
-                    tmd.columns.add(Column(columnName, datatype, isNullable))
+                    tmd.columns.add(
+                        Column(
+                            columnName,
+                            datatype,
+                            isNullable
+                        )
+                    )
                     //println("ColumnName: $columnName, DataType: $datatype, IsNullable: $isNullable")
                 }
                 generateEntityCode(tmd, entityPackage, entityPath)
