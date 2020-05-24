@@ -1,5 +1,3 @@
-//gradle jar
-//gradle publishToMavenLocal
 plugins {
     kotlin("jvm") version "1.3.72"
     id("java-gradle-plugin")
@@ -13,10 +11,6 @@ repositories {
     mavenCentral()
 }
 
-sourceSets {
-
-}
-
 dependencies {
     implementation(kotlin("stdlib-jdk8"))
     compileOnly("org.postgresql", "postgresql", "42.2.12")
@@ -25,8 +19,8 @@ dependencies {
 gradlePlugin {
     plugins {
         create("hustlePlugin") {
-            id = "com.github.arafat1.hustle"
-            implementationClass = "com.github.arafat1.hustle.HustlePlugin"
+            id = "${group}.hustle"
+            implementationClass = "${id}.HustlePlugin"
         }
     }
 }
@@ -40,11 +34,6 @@ publishing {
             artifact("build/libs/hustle-${version}.jar")
         }
     }
-//    repositories {
-//        maven {
-//            url = uri("file://Users/.m2")
-//        }
-//    }
 }
 
 tasks {
