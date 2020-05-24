@@ -7,43 +7,54 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.sql.*
-import java.util.ArrayList
 
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.resources.MissingResourceException
+import org.gradle.internal.impldep.org.eclipse.jgit.errors.NotSupportedException
+import java.util.*
 
 class HustlePlugin: Plugin<Project> {
     lateinit var hustleConfig: HustlePluginExtension
+    lateinit var dbKlassName: String
+    lateinit var database: Database
 
     override fun apply(project: Project) {
-        this.hustleConfig = project.extensions.create("hustle", HustlePluginExtension::class.java)
+        hustleConfig = project.extensions.create("hustle", HustlePluginExtension::class.java)
 
         with(project.task("generateScaffold")) {
             doLast {
-                if (hustleConfig.dbUrl == null) {
-                    throw MissingResourceException("Please provide databse Url")
-                }
-                if (hustleConfig.user == null || hustleConfig.password == null) {
+                if (hustleConfig.dbUrl == null) throw MissingResourceException("Please provide databse Url")
+                val urlFragments = hustleConfig.dbUrl!!.split(":")
+                if (urlFragments.size < 4) throw InvalidUserDataException("Url provided is not correct")
+
+                if (hustleConfig.user == null || hustleConfig.password == null)
                     throw InvalidUserDataException("Username or Password missing")
+
+                when(urlFragments[1]) {
+                    "postgresql" -> database = PostgreSql()
+                    else -> throw NotSupportedException("Database not supported")
                 }
-                val basePackage = ("${project.group}.${project.name}").replace("[^.a-zA-Z0-9]".toRegex(), "")
+
+                val basePackage = ("${project.group}.${project.name}")
+                    .replace(HustleConst.N_BASE_PACKAGE.toRegex(), "")
                 val entityPackage = "$basePackage.entity"
                 val repoPackage = "$basePackage.repository"
                 val baseDir: String = project.projectDir.path
-                val entityPath: Path = Paths.get(baseDir, "/src/main/java", entityPackage.replace('.', '/'))
-                val repoPath: Path = Paths.get(baseDir, "/src/main/java", repoPackage.replace('.', '/'))
+                val entityPath: Path = Paths.get(baseDir, HustleConst.SOURCE_SET, entityPackage.replace('.', '/'))
+                val repoPath: Path = Paths.get(baseDir, HustleConst.SOURCE_SET, repoPackage.replace('.', '/'))
+
                 entityPath.toFile().mkdir()
                 repoPath.toFile().mkdir()
+
                 generateScaffolds(entityPackage, repoPackage, entityPath.toString(), repoPath.toString())
             }
         }
     }
 
     private fun generateScaffolds(entityPackage: String, repoPackage: String, entityPath: String, repoPath: String) {
-        val conn: Connection
         Class.forName("org.postgresql.Driver")
-        conn = DriverManager.getConnection(hustleConfig.dbUrl, hustleConfig.user, hustleConfig.password)
+        val conn: Connection = DriverManager.getConnection(hustleConfig.dbUrl, hustleConfig.user, hustleConfig.password)
         val md: DatabaseMetaData = conn.metaData
 
         // tables
@@ -110,7 +121,7 @@ class HustlePlugin: Plugin<Project> {
             if (col.columnName == tmd.primaryKeyColumn)
                 lines.add("  @Id")
             lines.add("  @Column(name = \"${col.columnName}\")")
-            lines.add("  private ${getFieldType(col.dataType)} ${convertToJavaName(col.columnName, false)};\n")
+            lines.add("  private ${database.getJavaType(col.dataType)} ${convertToJavaName(col.columnName, false)};\n")
         }
 
         lines.add("}")
@@ -126,7 +137,7 @@ class HustlePlugin: Plugin<Project> {
         val lines: MutableList<String> = ArrayList()
         var primaryKeyType = ""
         for (col in tmd.columns) {
-            if (col.columnName == tmd.primaryKeyColumn) primaryKeyType = getFieldType(col.dataType)
+            if (col.columnName == tmd.primaryKeyColumn) primaryKeyType = database.getJavaType(col.dataType)
         }
         lines.add("package $repoPackage;\n")
 
@@ -154,24 +165,7 @@ class HustlePlugin: Plugin<Project> {
                 sb.append(element)
             }
         }
-        return sb.toString().replace("[^_a-zA-Z0-9]".toRegex(), "")
-    }
-
-    private fun getFieldType(type: String): String {
-        return when {
-            type.toUpperCase().contains("BOOL") -> "Boolean"
-            type.toUpperCase().contains("VARCHAR") -> "String"
-            type.toUpperCase().contains("CHAR") -> "String"
-            type.toUpperCase() == "TEXT" -> "String"
-            type.toUpperCase() == "NUMERIC" -> "BigDecimal"
-            type.toUpperCase() == "SMALLINT" -> "Integer"
-            type.toUpperCase() == "INT" -> "Integer"
-            type.toUpperCase() == "SERIAL" -> "Integer"
-            type.toUpperCase() == "BIGINT" -> "Long"
-            type.toUpperCase() == "DATE" -> "Date"
-            type.toUpperCase() == "TIMESTAMP" -> "Timestamp"
-            else -> "String"
-        }
+        return sb.toString().replace(HustleConst.N_VARIABLE.toRegex(), "")
     }
 
     private class TableMetaData(var tableName: String, var primaryKeyColumn: String) {

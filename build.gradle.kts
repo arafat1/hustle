@@ -13,6 +13,10 @@ repositories {
     mavenCentral()
 }
 
+sourceSets {
+
+}
+
 dependencies {
     implementation(kotlin("stdlib-jdk8"))
     compileOnly("org.postgresql", "postgresql", "42.2.12")
@@ -38,7 +42,7 @@ publishing {
     }
 //    repositories {
 //        maven {
-//            url = uri("/.m2")
+//            url = uri("file://Users/.m2")
 //        }
 //    }
 }
