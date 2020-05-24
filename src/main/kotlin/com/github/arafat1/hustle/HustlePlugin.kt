@@ -16,7 +16,7 @@ import java.util.*
 
 class HustlePlugin: Plugin<Project> {
     lateinit var hustleConfig: HustlePluginExtension
-    lateinit var dbKlassName: String
+    lateinit var dbDriver: String
     lateinit var database: Database
 
     override fun apply(project: Project) {
@@ -35,6 +35,7 @@ class HustlePlugin: Plugin<Project> {
                     "postgresql" -> database = PostgreSql()
                     else -> throw NotSupportedException("Database not supported")
                 }
+                dbDriver = "org.${urlFragments[1]}.Driver"
 
                 val basePackage = ("${project.group}.${project.name}")
                     .replace(HustleConst.N_BASE_PACKAGE.toRegex(), "")
@@ -53,7 +54,7 @@ class HustlePlugin: Plugin<Project> {
     }
 
     private fun generateScaffolds(entityPackage: String, repoPackage: String, entityPath: String, repoPath: String) {
-        Class.forName("org.postgresql.Driver")
+        Class.forName(dbDriver)
         val conn: Connection = DriverManager.getConnection(hustleConfig.dbUrl, hustleConfig.user, hustleConfig.password)
         val md: DatabaseMetaData = conn.metaData
 
